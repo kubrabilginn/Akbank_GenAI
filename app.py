@@ -1,11 +1,14 @@
+%%writefile app.py
 import streamlit as st
 import os
 import pandas as pd
-import chromadb
 from datasets import load_dataset
-from typing import List
-from google import genai
-from google.genai import types
+import chromadb # ChromaDB'yi manuel de dahil ediyoruz
+
+# LangChain Çekirdek ve Bağlayıcıları (requirements.txt'den geliyor)
+from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain.chains import RetrievalQA
 
 # ----------------------------------------------------------------------
 # 1. API Anahtarının Güvenli Kontrolü
@@ -14,106 +17,99 @@ from google.genai import types
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if not API_KEY:
-    # Bu mesaj Streamlit Cloud'a özeldir.
     st.error("❌ API Anahtarı bulunamadı. Lütfen Streamlit Secrets'ta 'GEMINI_API_KEY' Secret'ını ayarlayın.")
     st.stop()
+
+# Ortam değişkenini (LangSmith'i engellemek için) tekrar ayarlıyoruz
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
 
 # ----------------------------------------------------------------------
 # 2. RAG Bileşenleri Tanımları (Cache ile Hızlandırma)
 # ----------------------------------------------------------------------
 
-# Google GenAI İstemcisini oluşturma
-@st.cache_resource
-def get_ai_client():
-    return genai.Client(api_key=API_KEY)
-
 # Veri Seti Yükleme ve Hazırlama
 @st.cache_data
 def load_and_prepare_data():
+    # Load ve hazırlık kısmı aynı kalır
     dataset = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
     df = dataset.to_pandas()
     df['full_recipe'] = df.apply(
         lambda row: f"TARİF ADI: {row['Title']}\nMALZEMELER: {', '.join(row['Ingredients'])}\nADIMLAR: {row['Instructions']}",
         axis=1
     )
-    df['id'] = [f"doc_{i}" for i in range(len(df))]
-    return df['full_recipe'].tolist(), df['id'].tolist()
+    # LangChain'in Document objesi için gerekli olan formatlama (metadata için)
+    from langchain_core.documents import Document
+    docs = [Document(page_content=recipe) for recipe in df['full_recipe']]
+    return docs, df['full_recipe'].tolist() # İhtiyaç duyulursa eski liste de döner
 
-
-# --- ChromaDB Uyumlu Embedding Wrapper Sınıfı ---
-class ChromaGeminiEmbedFunction:
-    """ChromaDB'nin beklediği .name() metodunu sağlayan özel sınıf."""
-    
-    def __init__(self, client):
-        self.client = client
-        # ChromaDB'nin kontrolünü geçmesi için sabit bir isim atıyoruz
-        self._name = "gemini_custom_embedder_v4"
-        self.model = "embedding-001"
-
-    def name(self):
-        # KRİTİK ÇÖZÜM: ChromaDB'nin beklediği name() metodunu sağlıyor
-        return self._name
-    
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        # API'ye gömme isteği gönderme
-        response = self.client.models.batch_embed_content(
-            model=self.model,
-            contents=texts
-        )
-        return [r.values for r in response.embeddings]
-    
-    def __call__(self, texts: List[str]) -> List[List[float]]:
-        return self.embed_documents(texts)
-    
-# --- Wrapper Sınıfı Sonu ---
-
-
+# Embedding Modelini Tanımlama
 @st.cache_resource
-def get_chroma_db(recipe_docs, doc_ids):
-    client = get_ai_client()
-    gemini_embed_function = ChromaGeminiEmbedFunction(client) 
-    collection_name = "yemek_tarifleri_rag"
+def get_embedding_model():
+    return GoogleGenerativeAIEmbeddings(
+        model="embedding-001", 
+        google_api_key=API_KEY 
+    )
+
+# ChromaDB ve Retriever'ı Kurma (LANGCHAIN ÜZERİNDEN)
+@st.cache_resource
+def get_retriever(docs):
+    embedding_model = get_embedding_model()
     
-    # KRİTİK ÇÖZÜM: ChromaDB'yi bellek içi (In-Memory) modda başlatmak için ayarlar
-    # Bu, disk yazma izni sorununu ve tenant hatalarını çözer.
-    chroma_client = chromadb.Client()
+    # LangChain, Chroma'yı başlatırken gerekli tüm kontrolleri (izin, name) kendisi yapar
+    vectorstore = Chroma.from_documents(
+        documents=docs, 
+        embedding=embedding_model, 
+        collection_name="yemek_tarifleri_rag",
+        # Kalıcılığı kapatmak için None kullanıyoruz, bellek içi çalışır
+        persist_directory=None 
+    )
+    return vectorstore.as_retriever(search_kwargs={"k": 3})
+
+# LLM ve RAG Zincirini Kurma
+@st.cache_resource
+def get_qa_chain(retriever):
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", 
+        temperature=0.2, 
+        google_api_key=API_KEY 
+    )
+
+    PROMPT_TEMPLATE = """Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver. 
+    Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla.
+
+    BAĞLAM:
+    {context}
+
+    SORU: {question}
+    YANIT:"""
     
-    try:
-        # Önce koleksiyonu ALMAYI dener (Eğer önbellekten geldiyse)
-        collection = chroma_client.get_collection(
-            name=collection_name,
-            embedding_function=gemini_embed_function 
-        )
-    except:
-        # Eğer koleksiyon yoksa (genellikle ilk çalıştırma), OLUŞTURUR.
-        collection = chroma_client.create_collection(
-            name=collection_name,
-            embedding_function=gemini_embed_function
-        )
-        
-    # Belgeleri ekleme (Sadece ilk kez eklenecektir, cache sayesinde)
-    if collection.count() == 0:
-        collection.add(
-            documents=recipe_docs,
-            ids=doc_ids
-        )
-    
-    return collection
+    from langchain.prompts import PromptTemplate # Geri getirdiğimiz paketlerden import et
+    custom_rag_prompt = PromptTemplate.from_template(PROMPT_TEMPLATE)
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever,
+        chain_type_kwargs={"prompt": custom_rag_prompt},
+        return_source_documents=True
+    )
+    return qa_chain
 
 # ----------------------------------------------------------------------
 # 3. Streamlit Uygulama Arayüzü (Ana İşlem)
 # ----------------------------------------------------------------------
 
 # RAG bileşenlerini yükle
-recipe_docs, doc_ids = load_and_prepare_data()
-db_collection = get_chroma_db(recipe_docs, doc_ids)
-ai_client = get_ai_client()
-llm_model = "gemini-2.5-flash"
+docs, _ = load_and_prepare_data()
+retriever = get_retriever(docs)
+qa_chain = get_qa_chain(retriever)
 
+# ... (Kullanıcı arayüz kodu aynı kalır) ...
 
 st.set_page_config(page_title="Akbank GenAI Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (Doğrudan SDK RAG)")
-st.caption(f"Veri tabanımızda {len(recipe_docs)} tarif bulunmaktadır. (Gemini 2.5 Flash ile güçlendirilmiştir)")
+st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (LangChain RAG)")
+st.caption(f"Veri tabanımızda {len(docs)} tarif bulunmaktadır. (Gemini 2.5 Flash ile güçlendirilmiştir)")
 st.divider()
 
 if 'history' not in st.session_state:
@@ -126,35 +122,15 @@ if user_query:
     
     with st.spinner(f"'{user_query}' için tarif aranıyor..."):
         try:
-            # 1. Geri Getirme (Retrieval) - ChromaDB'den kaynak bulma
-            results = db_collection.query(
-                query_texts=[user_query],
-                n_results=3,
-                include=['documents']
-            )
+            # LangChain zincirini çalıştırma
+            response = qa_chain.invoke({"query": user_query})
             
-            # Kaynak metinleri birleştirme
-            context = "\n---\n".join(results['documents'][0])
-            source_names = [doc.split('\n')[0].replace('TARİF ADI: ', '') for doc in results['documents'][0]]
+            llm_response = response['result']
+            source_docs = response['source_documents']
+            
+            # Kaynak metinleri işleme
+            source_names = [doc.page_content.split('\n')[0].replace('TARİF ADI: ', '') for doc in source_docs]
 
-            # 2. Üretim (Generation) - Prompt oluşturma
-            PROMPT = f"""Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver. 
-Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla.
-
-BAĞLAM:
-{context}
-
-SORU: {user_query}
-YANIT:"""
-            
-            # 3. LLM'ye gönderme
-            response = ai_client.models.generate_content(
-                model=llm_model,
-                contents=PROMPT
-            )
-            
-            llm_response = response.text
-            
             st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_names})
 
         except Exception as e:
