@@ -1,3 +1,6 @@
+# Hata çözümü için langsmith takibini uygulama seviyesinde devre dışı bırakma
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ["LANGCHAIN_SESSION"] = "false"
 import streamlit as st
 import os
 import pandas as pd
