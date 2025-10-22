@@ -1,11 +1,14 @@
-# Temel Streamlit ve Veri Kütüphaneleri
+# Temel Kütüphaneler
 streamlit
 pandas
 datasets
-pydantic==1.10.13  # Pydantic'in eski bir versiyonunu zorluyoruz. 
-                   # LangChain ve Google kütüphanelerinde yaşanan uyumluluk sorunlarını çözer.
 
-# RAG Bileşenleri (LangChain'in yeni, ayrılmış paketleri)
+# LangChain Çekirdek ve Bağlayıcılar
 langchain
 langchain-chroma
 langchain-google-genai
+
+# Kritik Alt Bağımlılıklar (Uyumluluk sorunlarını çözmek için eklenmiştir)
+pydantic==1.10.13
+google-auth
+protobuf
