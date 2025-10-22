@@ -1,12 +1,9 @@
-
 import streamlit as st
 import os
 import pandas as pd
 import chromadb
 from datasets import load_dataset
-from chromadb.utils import embedding_functions
-
-# Google SDK ve diğer yardımcılar
+from typing import List
 from google import genai
 from google.genai import types
 
@@ -17,6 +14,7 @@ from google.genai import types
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if not API_KEY:
+    # Bu mesaj Streamlit Cloud'a özeldir.
     st.error("❌ API Anahtarı bulunamadı. Lütfen Streamlit Secrets'ta 'GEMINI_API_KEY' Secret'ını ayarlayın.")
     st.stop()
 
@@ -38,64 +36,61 @@ def load_and_prepare_data():
         lambda row: f"TARİF ADI: {row['Title']}\nMALZEMELER: {', '.join(row['Ingredients'])}\nADIMLAR: {row['Instructions']}",
         axis=1
     )
-    # ChromaDB için benzersiz ID'ler oluşturma
     df['id'] = [f"doc_{i}" for i in range(len(df))]
     return df['full_recipe'].tolist(), df['id'].tolist()
 
-# app.py dosyasındaki importlarınızın hemen altına bu sınıfı ekleyin:
-# from google.genai import types (Zaten mevcut olmalı)
-
-# app.py dosyasındaki mevcut ChromaGeminiEmbedFunction sınıfını BULARAK aşağıdaki ile değiştirin:
-
-# ChromaDB'nin beklediği temel interface'i sağlamak için gerekli
-from typing import List
 
 # --- ChromaDB Uyumlu Embedding Wrapper Sınıfı ---
 class ChromaGeminiEmbedFunction:
-    """ChromaDB için tasarlanmış basit Gemini Embedding Wrapper'ı."""
+    """ChromaDB'nin beklediği .name() metodunu sağlayan özel sınıf."""
     
-    # ChromaDB bu metotları zorunlu kılıyor
     def __init__(self, client):
         self.client = client
         # ChromaDB'nin kontrolünü geçmesi için sabit bir isim atıyoruz
-        self._name = "gemini_custom_embedder_v3" 
+        self._name = "gemini_custom_embedder_v4"
         self.model = "embedding-001"
 
-    # KRİTİK ÇÖZÜM: ChromaDB'nin beklediği name() metodunu tanımlıyoruz
     def name(self):
+        # KRİTİK ÇÖZÜM: ChromaDB'nin beklediği name() metodunu sağlıyor
         return self._name
     
-    # ChromaDB bu metodu toplu embedding için çağırır
-    def __call__(self, texts: List[str]) -> List[List[float]]:
-        return self.embed_documents(texts)
-    
-    # API'ye gömme isteği gönderme metodu
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # API'ye gömme isteği gönderme
         response = self.client.models.batch_embed_content(
             model=self.model,
             contents=texts
         )
         return [r.values for r in response.embeddings]
     
+    def __call__(self, texts: List[str]) -> List[List[float]]:
+        return self.embed_documents(texts)
+    
 # --- Wrapper Sınıfı Sonu ---
 
-# get_chroma_db fonksiyonunu güncelleyin:
+
 @st.cache_resource
 def get_chroma_db(recipe_docs, doc_ids):
     client = get_ai_client()
-    
-    # 1. ChromaDB Uyumlu Gömme Fonksiyonunu Oluşturma
     gemini_embed_function = ChromaGeminiEmbedFunction(client) 
-
-    # 2. ChromaDB'yi Bellek İçi (In-Memory) Modda Oluşturma
+    collection_name = "yemek_tarifleri_rag"
+    
+    # KRİTİK ÇÖZÜM: ChromaDB'yi bellek içi (In-Memory) modda başlatmak için ayarlar
+    # Bu, disk yazma izni sorununu ve tenant hatalarını çözer.
     chroma_client = chromadb.Client()
     
-    # 3. Koleksiyonu oluşturma ve belgeleri ekleme
-    collection = chroma_client.get_or_create_collection(
-        name="yemek_tarifleri_rag",
-        embedding_function=gemini_embed_function # Artık özel sınıfı kullanıyoruz
-    )
-    
+    try:
+        # Önce koleksiyonu ALMAYI dener (Eğer önbellekten geldiyse)
+        collection = chroma_client.get_collection(
+            name=collection_name,
+            embedding_function=gemini_embed_function 
+        )
+    except:
+        # Eğer koleksiyon yoksa (genellikle ilk çalıştırma), OLUŞTURUR.
+        collection = chroma_client.create_collection(
+            name=collection_name,
+            embedding_function=gemini_embed_function
+        )
+        
     # Belgeleri ekleme (Sadece ilk kez eklenecektir, cache sayesinde)
     if collection.count() == 0:
         collection.add(
@@ -103,8 +98,7 @@ def get_chroma_db(recipe_docs, doc_ids):
             ids=doc_ids
         )
     
-    return collection# ChromaDB ve Embedding Fonksiyonunu Kurma
-
+    return collection
 
 # ----------------------------------------------------------------------
 # 3. Streamlit Uygulama Arayüzü (Ana İşlem)
