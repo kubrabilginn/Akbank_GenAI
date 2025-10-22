@@ -3,18 +3,7 @@ streamlit
 pandas
 datasets
 
-# LangChain Çekirdek ve Bağlayıcılar (Artık sadece bu modülleri yüklüyoruz)
-langchain-core
-langchain-chroma
-langchain-google-genai
-
-# ChromaDB de gereklidir
+# RAG için gerekli olan, LangChain'den bağımsız paketler
+google-genai  # Google'ın kendi SDK'sı (LLM ve Embedding için)
 chromadb
-
-# Kritik Alt Bağımlılıklar (Uyumluluk için zorunlu)
-pydantic==1.10.13
-google-auth
-protobuf
-grpcio
-typing-extensions
-tenacity
+numpy
