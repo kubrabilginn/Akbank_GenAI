@@ -5,10 +5,20 @@ from datasets import load_dataset
 import chromadb # ChromaDB'yi manuel de dahil ediyoruz
 
 # LangChain Çekirdek ve Bağlayıcıları (requirements.txt'den geliyor)
+# app.py dosyasının başındaki importları bulun (Yaklaşık 5. satır):
+
+# Eski Hatalı Import Zinciri:
+# from langchain_chroma import Chroma
+# from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+# from langchain.chains import RetrievalQA
+
+# YENİ VE DÜZELTİLMİŞ IMPORT ZİNCİRİ:
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.chains import RetrievalQA
+from langchain.chains import RetrievalQA # Bu satırı tutuyoruz
 
+# KRİTİK EKSİK IMPORT: Bu satır, hatayı çözer
+from langchain_core.documents import Document
 # ----------------------------------------------------------------------
 # 1. API Anahtarının Güvenli Kontrolü
 # ----------------------------------------------------------------------
