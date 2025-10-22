@@ -1,0 +1,13 @@
+[server]
+# Uygulamanın başladığı varsayılan port
+port = 8501
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUseStats = false
+
+# PYTHON VERSİYONU AYARI (UYUMSUZLUĞU ÇÖZMEK İÇİN PYTHON 3.10'A ZORLAMA)
+# Streamlit, genelde Python 3.10'u daha stabil kullanır.
+# Eğer bu satır hata verirse silin, ancak önce bu haliyle deneyin.
+python = 3.10
