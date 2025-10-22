@@ -66,9 +66,10 @@ def get_retriever(recipe_docs):
     return vectorstore.as_retriever(search_kwargs={"k": 3})
 
 # RAG Zincirini Kurma (Cache dekoratörü kalıcı olarak kaldırıldı)
+# app.py dosyasındaki get_qa_chain fonksiyonunu bununla değiştirin
 def get_qa_chain(retriever):
     llm = get_llm_model()
-    
+
     PROMPT_TEMPLATE = """Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver. 
     Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla ve dışarıdan bilgi ekleme.
 
@@ -79,13 +80,21 @@ def get_qa_chain(retriever):
     YANIT:"""
     custom_rag_prompt = PromptTemplate.from_template(PROMPT_TEMPLATE)
 
-    return RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        chain_type_kwargs={"prompt": custom_rag_prompt},
-        return_source_documents=True
+    # 🛑 YENİ ZİNCİR KURULUMU (Runnable Yöntemi)
+    rag_chain = (
+        {"context": retriever, "question": RunnablePassthrough()}
+        | custom_rag_prompt
+        | llm
+        | StrOutputParser()
     )
+    
+    # Not: Kaynak dökümanları (sources) burada otomatik olarak döndürülemez, bu yüzden 
+    # Streamlit'te yalnızca LLM'in yanıtını gösteririz.
+    return rag_chain 
+
+# app.py'de çağırma şekliniz de değişmeli:
+# qa_chain = get_qa_chain(retriever)
+# result = qa_chain.invoke(user_query) # Artık sadece dize döndürür    )
 
 # ----------------------------------------------------------------------
 # 3. Streamlit Uygulama Arayüzü (Ana İşlem) - HER ŞEY BURADA BAŞLAR
