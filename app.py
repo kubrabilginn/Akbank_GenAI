@@ -45,33 +45,39 @@ def load_and_prepare_data():
 # app.py dosyasındaki importlarınızın hemen altına bu sınıfı ekleyin:
 # from google.genai import types (Zaten mevcut olmalı)
 
+# app.py dosyasındaki mevcut ChromaGeminiEmbedFunction sınıfını BULARAK aşağıdaki ile değiştirin:
+
+# ChromaDB'nin beklediği temel interface'i sağlamak için gerekli
+from typing import List
+
 # --- ChromaDB Uyumlu Embedding Wrapper Sınıfı ---
 class ChromaGeminiEmbedFunction:
-    """ChromaDB için özel olarak tasarlanmış Gemini Embedding Wrapper'ı."""
+    """ChromaDB için tasarlanmış basit Gemini Embedding Wrapper'ı."""
     
+    # ChromaDB bu metotları zorunlu kılıyor
     def __init__(self, client):
         self.client = client
-        self._name = "gemini_custom_embedder_v1" # ChromaDB'nin beklediği isim
+        # ChromaDB'nin kontrolünü geçmesi için sabit bir isim atıyoruz
+        self._name = "gemini_custom_embedder_v3" 
         self.model = "embedding-001"
 
-    def __call__(self, texts):
-        # ChromaDB, bu metodu doğrudan çağıracaktır.
+    # KRİTİK ÇÖZÜM: ChromaDB'nin beklediği name() metodunu tanımlıyoruz
+    def name(self):
+        return self._name
+    
+    # ChromaDB bu metodu toplu embedding için çağırır
+    def __call__(self, texts: List[str]) -> List[List[float]]:
         return self.embed_documents(texts)
     
-    def embed_documents(self, texts):
-        # API'ye gömme isteği gönderme
+    # API'ye gömme isteği gönderme metodu
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
         response = self.client.models.batch_embed_content(
             model=self.model,
             contents=texts
         )
         return [r.values for r in response.embeddings]
-
-    def name(self):
-        # KRİTİK ÇÖZÜM: ChromaDB'nin beklediği .name() metodunu tanımlar
-        return self._name
     
 # --- Wrapper Sınıfı Sonu ---
-
 
 # get_chroma_db fonksiyonunu güncelleyin:
 @st.cache_resource
