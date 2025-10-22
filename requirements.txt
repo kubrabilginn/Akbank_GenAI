@@ -3,7 +3,12 @@ streamlit
 pandas
 datasets
 
-# RAG için gerekli olan, LangChain'den bağımsız paketler
-google-genai  # Google'ın kendi SDK'sı (LLM ve Embedding için)
+# LangChain'i ve Çekirdek Bağlayıcılarını Geri Getirme (STABİL VERSİYONLAR)
+langchain==0.1.14
+langchain-chroma==0.1.1
+langchain-google-genai==0.0.12
+
+# ChromaDB ve diğer zorunlu paketler
 chromadb
-numpy
+pydantic==1.10.13
+protobuf==3.20.3
