@@ -8,13 +8,10 @@ langchain
 langchain-chroma
 langchain-google-genai
 
-# Kritik Alt Bağımlılıklar (Pydantic ve LangSmith Uyumluluğu İçin)
-# Bu versiyon, genellikle LangChain'in eski çekirdek bileşenleriyle daha uyumludur.
-pydantic==1.10.13 
-
-# Diğer Gerekli Kütüphaneler
+# KRİTİK UYUMSUZLUK ÇÖZÜMÜ İÇİN ZORUNLU VERSİYONLAR
+pydantic==1.10.13
 google-auth
 protobuf
 grpcio
 typing-extensions
-tenacity # LangChain'in kullandığı bir retry kütüphanesi
+tenacity
