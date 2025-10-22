@@ -1,14 +1,7 @@
-# Temel Kütüphaneler
 streamlit
 pandas
 datasets
-
-# LangChain'i ve Çekirdek Bağlayıcılarını Geri Getirme (STABİL VERSİYONLAR)
-langchain==0.1.14
-langchain-chroma==0.1.1
-langchain-google-genai==0.0.12
-
-# ChromaDB ve diğer zorunlu paketler
+langchain
+langchain-chroma
+langchain-google-genai
 chromadb
-pydantic==1.10.13
-protobuf==3.20.3
