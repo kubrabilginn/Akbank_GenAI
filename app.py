@@ -15,7 +15,7 @@ import chromadb # ChromaDB'yi manuel de dahil ediyoruz
 # YENİ VE DÜZELTİLMİŞ IMPORT ZİNCİRİ:
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.chains import RetrievalQA # Bu satırı tutuyoruz
+from langchain.chains.retrieval_qa.base import RetrievalQA
 
 # KRİTİK EKSİK IMPORT: Bu satır, hatayı çözer
 from langchain_core.documents import Document
