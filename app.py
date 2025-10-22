@@ -1,16 +1,18 @@
-
+# app.py'deki importları değiştirin
 import streamlit as st
 import os
 import pandas as pd
 from datasets import load_dataset
-# LangChain bileşenleri
-from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.chains import RetrievalQA
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
 
-# ----------------------------------------------------------------------
+# LangChain bileşenleri, artık ait oldukları alt paketlerden import ediliyor:
+from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_core.prompts import PromptTemplate # 'langchain.prompts' yerine!
+from langchain_core.runnables import RunnablePassthrough # Zincir oluşturma için yeni yöntem
+from langchain_core.output_parsers import StrOutputParser # Çıktı formatlama
+
+# NOT: 'RetrievalQA' artık doğrudan import edilemeyebilir. 
+# Bu nedenle, RAG zincirini farklı bir şekilde kurmalıyız.# ----------------------------------------------------------------------
 # 1. API Anahtarının Güvenli Kontrolü
 # ----------------------------------------------------------------------
 
