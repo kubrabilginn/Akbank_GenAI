@@ -1,0 +1,6 @@
+langchain
+langchain-chroma
+langchain-google-genai
+datasets
+pandas
+streamlit
