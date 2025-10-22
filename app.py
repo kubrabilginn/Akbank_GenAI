@@ -42,8 +42,62 @@ def load_and_prepare_data():
     df['id'] = [f"doc_{i}" for i in range(len(df))]
     return df['full_recipe'].tolist(), df['id'].tolist()
 
+# app.py dosyasındaki importlarınızın hemen altına bu sınıfı ekleyin:
+# from google.genai import types (Zaten mevcut olmalı)
 
-# ChromaDB ve Embedding Fonksiyonunu Kurma
+# --- ChromaDB Uyumlu Embedding Wrapper Sınıfı ---
+class ChromaGeminiEmbedFunction:
+    """ChromaDB için özel olarak tasarlanmış Gemini Embedding Wrapper'ı."""
+    
+    def __init__(self, client):
+        self.client = client
+        self._name = "gemini_custom_embedder_v1" # ChromaDB'nin beklediği isim
+        self.model = "embedding-001"
+
+    def __call__(self, texts):
+        # ChromaDB, bu metodu doğrudan çağıracaktır.
+        return self.embed_documents(texts)
+    
+    def embed_documents(self, texts):
+        # API'ye gömme isteği gönderme
+        response = self.client.models.batch_embed_content(
+            model=self.model,
+            contents=texts
+        )
+        return [r.values for r in response.embeddings]
+
+    def name(self):
+        # KRİTİK ÇÖZÜM: ChromaDB'nin beklediği .name() metodunu tanımlar
+        return self._name
+    
+# --- Wrapper Sınıfı Sonu ---
+
+
+# get_chroma_db fonksiyonunu güncelleyin:
+@st.cache_resource
+def get_chroma_db(recipe_docs, doc_ids):
+    client = get_ai_client()
+    
+    # 1. ChromaDB Uyumlu Gömme Fonksiyonunu Oluşturma
+    gemini_embed_function = ChromaGeminiEmbedFunction(client) 
+
+    # 2. ChromaDB'yi Bellek İçi (In-Memory) Modda Oluşturma
+    chroma_client = chromadb.Client()
+    
+    # 3. Koleksiyonu oluşturma ve belgeleri ekleme
+    collection = chroma_client.get_or_create_collection(
+        name="yemek_tarifleri_rag",
+        embedding_function=gemini_embed_function # Artık özel sınıfı kullanıyoruz
+    )
+    
+    # Belgeleri ekleme (Sadece ilk kez eklenecektir, cache sayesinde)
+    if collection.count() == 0:
+        collection.add(
+            documents=recipe_docs,
+            ids=doc_ids
+        )
+    
+    return collection# ChromaDB ve Embedding Fonksiyonunu Kurma
 @st.cache_resource
 def get_chroma_db(recipe_docs, doc_ids):
     client = get_ai_client()
