@@ -1,15 +1,14 @@
-# Temel Kütüphaneler
+# Temel Kütüphaneler (Versiyon Kilitlerini Kaldırdık)
 streamlit
 pandas
 datasets
 
-# LangChain Çekirdek ve Bağlayıcılar (STABİL VERSİYONLARA ZORLAMA)
-langchain==0.1.14
-langchain-chroma==0.1.1
-langchain-google-genai==0.0.12
+# LangChain Çekirdek ve Bağlayıcılar (EN SON VERSİYONLARI KULLANMASINI SAĞLADIK)
+langchain
+langchain-chroma
+langchain-google-genai
 
-# Kritik Alt Bağımlılıklar (Uyumluluk için zorunlu)
-pydantic==1.10.13
+# Kritik Alt Bağımlılıklar (Pydantic'i tekrar zorlamıyoruz, yeni versiyonu deneyecek)
 google-auth
 protobuf
 grpcio
