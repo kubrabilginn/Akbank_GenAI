@@ -53,6 +53,7 @@ API Anahtarının Tanımlanması: Gemini API Anahtarınızı ortam değişkeni o
 Bash
 
 ```export GEMINI_API_KEY="SİZİN_ANAHTARINIZ"```
+
 Uygulamanın Başlatılması:
 
 Bash
