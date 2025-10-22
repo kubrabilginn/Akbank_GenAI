@@ -1,7 +1,20 @@
+# Temel Kütüphaneler
 streamlit
 pandas
 datasets
-langchain
-langchain-chroma
-langchain-google-genai
+
+# LangChain Çekirdek ve Bağlayıcılar (Önceki kararlı sürümü zorluyoruz)
+langchain==0.1.14
+langchain-chroma==0.1.1
+langchain-google-genai==0.0.12
+
+# ChromaDB ve diğer zorunlu paketler
 chromadb
+
+# Kritik Alt Bağımlılıklar (Uyumluluk için zorunlu)
+pydantic==1.10.13
+google-auth
+protobuf==3.20.3
+grpcio
+typing-extensions
+tenacity
