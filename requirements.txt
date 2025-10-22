@@ -2,22 +2,9 @@
 streamlit
 pandas
 datasets
+numpy
 
-# LangChain Çekirdeği (Tek Tek Yükleme)
-langchain-core
-langchain-community
-langchain-text-splitters
-langchain-text-splitters==0.0.1
-pydantic==1.10.13
-
-# Bağlayıcılar ve Veri Depolama
-langchain-chroma==0.1.1
-langchain-google-genai==0.0.12
+# RAG için gerekli olan, LangChain'den bağımsız paketler
+google-genai  # Google'ın kendi SDK'sı (LLM ve Embedding için)
 chromadb
-
-# Diğer Zorunlu Alt Bağımlılıklar
-google-auth
-protobuf==3.20.3
-grpcio
-typing-extensions
-tenacity
+protobuf==3.20.3 # Uyumsuzluk çıkardığı bilinen bir paketi eski, güvenli versiyonda tutalım
