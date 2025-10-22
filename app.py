@@ -1,47 +1,33 @@
-# app.py'deki importları değiştirin
+%%writefile app.py
 import streamlit as st
 import os
 import pandas as pd
+import chromadb
 from datasets import load_dataset
+from chromadb.utils import embedding_functions
 
-# LangChain bileşenleri, artık ait oldukları alt paketlerden import ediliyor:
-from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate # 'langchain.prompts' yerine!
-from langchain_core.runnables import RunnablePassthrough # Zincir oluşturma için yeni yöntem
-from langchain_core.output_parsers import StrOutputParser # Çıktı formatlama
+# Google SDK ve diğer yardımcılar
+from google import genai
+from google.genai import types
 
-# NOT: 'RetrievalQA' artık doğrudan import edilemeyebilir. 
-# Bu nedenle, RAG zincirini farklı bir şekilde kurmalıyız.# ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # 1. API Anahtarının Güvenli Kontrolü
 # ----------------------------------------------------------------------
 
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if not API_KEY:
-    st.error("❌ API Anahtarı bulunamadı. Lütfen Streamlit Cloud'da 'GEMINI_API_KEY' Secret'ını ayarlayın.")
+    st.error("❌ API Anahtarı bulunamadı. Lütfen Streamlit Secrets'ta 'GEMINI_API_KEY' Secret'ını ayarlayın.")
     st.stop()
-# Hata çözümü için langsmith takibini uygulama seviyesinde devre dışı bırakma
-os.environ["LANGCHAIN_TRACING_V2"] = "false"
-os.environ["LANGCHAIN_SESSION"] = "false"# ----------------------------------------------------------------------
-# 2. RAG Bileşenleri Tanımları (FONKSİYONLAR BURADA BAŞLAR)
+
+# ----------------------------------------------------------------------
+# 2. RAG Bileşenleri Tanımları (Cache ile Hızlandırma)
 # ----------------------------------------------------------------------
 
-# LLM ve Embedding Modelini Tanımlama (Doğrudan API Anahtarı ile)
+# Google GenAI İstemcisini oluşturma
 @st.cache_resource
-def get_llm_model():
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", 
-        temperature=0.2, 
-        google_api_key=API_KEY 
-    )
-
-@st.cache_resource
-def get_embedding_model():
-    return GoogleGenerativeAIEmbeddings(
-        model="text-embedding-004", 
-        google_api_key=API_KEY 
-    )
+def get_ai_client():
+    return genai.Client(api_key=API_KEY)
 
 # Veri Seti Yükleme ve Hazırlama
 @st.cache_data
@@ -52,89 +38,98 @@ def load_and_prepare_data():
         lambda row: f"TARİF ADI: {row['Title']}\nMALZEMELER: {', '.join(row['Ingredients'])}\nADIMLAR: {row['Instructions']}",
         axis=1
     )
-    return df['full_recipe'].tolist()
+    # ChromaDB için benzersiz ID'ler oluşturma
+    df['id'] = [f"doc_{i}" for i in range(len(df))]
+    return df['full_recipe'].tolist(), df['id'].tolist()
 
-# Vektör Veritabanı ve Retriever'ı Yükleme/Oluşturma
+
+# ChromaDB ve Embedding Fonksiyonunu Kurma
 @st.cache_resource
-def get_retriever(recipe_docs):
-    embedding_model = get_embedding_model()
-    vectorstore = Chroma.from_texts(
-        texts=recipe_docs, 
-        embedding=embedding_model, 
-        collection_name="yemek_tarifleri_rag"
-    )
-    return vectorstore.as_retriever(search_kwargs={"k": 3})
-
-# RAG Zincirini Kurma (Cache dekoratörü kalıcı olarak kaldırıldı)
-# app.py dosyasındaki get_qa_chain fonksiyonunu bununla değiştirin
-def get_qa_chain(retriever):
-    llm = get_llm_model()
-
-    PROMPT_TEMPLATE = """Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver. 
-    Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla ve dışarıdan bilgi ekleme.
-
-    BAĞLAM:
-    {context}
-
-    SORU: {question}
-    YANIT:"""
-    custom_rag_prompt = PromptTemplate.from_template(PROMPT_TEMPLATE)
-
-    # 🛑 YENİ ZİNCİR KURULUMU (Runnable Yöntemi)
-    rag_chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | custom_rag_prompt
-        | llm
-        | StrOutputParser()
-    )
+def get_chroma_db(recipe_docs, doc_ids):
+    client = get_ai_client()
     
-    # Not: Kaynak dökümanları (sources) burada otomatik olarak döndürülemez, bu yüzden 
-    # Streamlit'te yalnızca LLM'in yanıtını gösteririz.
-    return rag_chain 
+    # 1. Embedding Fonksiyonu Tanımlama (Gemini API'sini kullanır)
+    def gemini_embed_function(texts):
+        # Gemini API'sine embedding isteği gönderme
+        response = client.models.batch_embed_content(
+            model="models/embedding-001",
+            contents=texts
+        )
+        return [r.values for r in response.embeddings]
 
-# app.py'de çağırma şekliniz de değişmeli:
-# qa_chain = get_qa_chain(retriever)
-# result = qa_chain.invoke(user_query) # Artık sadece dize döndürür    )
+    # 2. ChromaDB'yi Bellek İçi (In-Memory) Modda Oluşturma
+    chroma_client = chromadb.Client()
+    
+    # 3. Koleksiyonu oluşturma ve belgeleri ekleme
+    collection = chroma_client.get_or_create_collection(
+        name="yemek_tarifleri_rag",
+        embedding_function=gemini_embed_function # Özel embedding fonksiyonumuzu kullan
+    )
+    collection.add(
+        documents=recipe_docs,
+        ids=doc_ids
+    )
+    return collection
 
 # ----------------------------------------------------------------------
-# 3. Streamlit Uygulama Arayüzü (Ana İşlem) - HER ŞEY BURADA BAŞLAR
+# 3. Streamlit Uygulama Arayüzü (Ana İşlem)
 # ----------------------------------------------------------------------
 
-# 3.1 RAG Bileşenlerini Yükleme/Kurma
-# Bu çağırmalar artık fonksiyon tanımlarının altında yapıldığı için NameError çözüldü.
-recipe_docs = load_and_prepare_data()
-retriever = get_retriever(recipe_docs)
-qa_chain = get_qa_chain(retriever)
+# RAG bileşenlerini yükle
+recipe_docs, doc_ids = load_and_prepare_data()
+db_collection = get_chroma_db(recipe_docs, doc_ids)
+ai_client = get_ai_client()
+llm_model = "gemini-2.5-flash"
 
 
-# 3.2 Arayüz Başlıkları
 st.set_page_config(page_title="Akbank GenAI Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (RAG)")
+st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (Doğrudan SDK RAG)")
 st.caption(f"Veri tabanımızda {len(recipe_docs)} tarif bulunmaktadır. (Gemini 2.5 Flash ile güçlendirilmiştir)")
 st.divider()
 
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-# Kullanıcı Girişi
 user_query = st.chat_input("Tarif sorunuzu girin (Örn: Ispanak ve peynirle ne yapabilirim?)")
 
 if user_query:
-    # Kullanıcı sorgusunu kaydet
     st.session_state.history.append({"role": "user", "content": user_query})
     
     with st.spinner(f"'{user_query}' için tarif aranıyor..."):
         try:
-            # RAG Zincirini Çalıştırma
-            response = qa_chain.invoke({"query": user_query})
-            llm_response = response['result']
-            source_docs = response['source_documents']
+            # 1. Geri Getirme (Retrieval) - ChromaDB'den kaynak bulma
+            results = db_collection.query(
+                query_texts=[user_query],
+                n_results=3,
+                include=['documents']
+            )
+            
+            # Kaynak metinleri birleştirme
+            context = "\n---\n".join(results['documents'][0])
+            source_names = [doc.split('\n')[0].replace('TARİF ADI: ', '') for doc in results['documents'][0]]
 
-            # Yanıtı ve kaynakları geçmişe ekleme
-            st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_docs})
+            # 2. Üretim (Generation) - Prompt oluşturma
+            PROMPT = f"""Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver. 
+Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla.
+
+BAĞLAM:
+{context}
+
+SORU: {user_query}
+YANIT:"""
+            
+            # 3. LLM'ye gönderme
+            response = ai_client.models.generate_content(
+                model=llm_model,
+                contents=PROMPT
+            )
+            
+            llm_response = response.text
+            
+            st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_names})
 
         except Exception as e:
-            error_msg = f"API Hatası: Lütfen API anahtarınızın Streamlit Secrets'ta doğru ayarlandığından emin olun. Hata: {e}"
+            error_msg = f"RAG/API Hatası: Lütfen API anahtarınızın doğru olduğundan emin olun. Detay: {e}"
             st.session_state.history.append({"role": "assistant", "content": error_msg, "sources": []})
 
 # Geçmişi gösterme
@@ -142,10 +137,8 @@ for message in st.session_state.history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         
-        # Yanıtta kullanılan kaynakları göster
-        if message["role"] == "assistant" and "sources" in message and message["sources"]:
+        if message["role"] == "assistant" and message.get("sources"):
             st.markdown("---")
             st.markdown("**Kullanılan Kaynak Tarifler:**")
-            source_names = [doc.page_content.split('\n')[0].replace('TARİF ADI: ', '') for doc in message["sources"]]
-            for name in set(source_names):
+            for name in set(message["sources"]):
                 st.markdown(f"**-** *{name}*")
