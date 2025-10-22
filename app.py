@@ -104,32 +104,7 @@ def get_chroma_db(recipe_docs, doc_ids):
         )
     
     return collection# ChromaDB ve Embedding Fonksiyonunu Kurma
-@st.cache_resource
-def get_chroma_db(recipe_docs, doc_ids):
-    client = get_ai_client()
-    
-    # 1. Embedding Fonksiyonu Tanımlama (Gemini API'sini kullanır)
-    def gemini_embed_function(texts):
-        # Gemini API'sine embedding isteği gönderme
-        response = client.models.batch_embed_content(
-            model="models/embedding-001",
-            contents=texts
-        )
-        return [r.values for r in response.embeddings]
 
-    # 2. ChromaDB'yi Bellek İçi (In-Memory) Modda Oluşturma
-    chroma_client = chromadb.Client()
-    
-    # 3. Koleksiyonu oluşturma ve belgeleri ekleme
-    collection = chroma_client.get_or_create_collection(
-        name="yemek_tarifleri_rag",
-        embedding_function=gemini_embed_function # Özel embedding fonksiyonumuzu kullan
-    )
-    collection.add(
-        documents=recipe_docs,
-        ids=doc_ids
-    )
-    return collection
 
 # ----------------------------------------------------------------------
 # 3. Streamlit Uygulama Arayüzü (Ana İşlem)
