@@ -1,6 +1,11 @@
+# Temel Streamlit ve Veri Kütüphaneleri
+streamlit
+pandas
+datasets
+pydantic==1.10.13  # Pydantic'in eski bir versiyonunu zorluyoruz. 
+                   # LangChain ve Google kütüphanelerinde yaşanan uyumluluk sorunlarını çözer.
+
+# RAG Bileşenleri (LangChain'in yeni, ayrılmış paketleri)
 langchain
 langchain-chroma
 langchain-google-genai
-datasets
-pandas
-streamlit
