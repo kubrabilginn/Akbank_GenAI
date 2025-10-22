@@ -1,16 +1,13 @@
-# Temel Kütüphaneler (Versiyon Kilitlerini Kaldırdık)
 streamlit
 pandas
 datasets
 
-# LangChain Çekirdek ve Bağlayıcılar (EN SON VERSİYONLARI KULLANMASINI SAĞLADIK)
+# LangChain'in en son stabil sürümünü belirtin (Çekirdek paketi)
 langchain
+
+# Google ve Chroma bağlayıcılarını ayrı ayrı tutun
 langchain-chroma
 langchain-google-genai
 
-# Kritik Alt Bağımlılıklar (Pydantic'i tekrar zorlamıyoruz, yeni versiyonu deneyecek)
-google-auth
-protobuf
-grpcio
-typing-extensions
-tenacity
+# Çakışmaya neden olan alt bağımlılıkları kaldırdık.
+# Python 3.10'da bunların otomatik çözülmesini umuyoruz.
