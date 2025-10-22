@@ -1,6 +1,4 @@
-# Hata çözümü için langsmith takibini uygulama seviyesinde devre dışı bırakma
-os.environ["LANGCHAIN_TRACING_V2"] = "false"
-os.environ["LANGCHAIN_SESSION"] = "false"
+
 import streamlit as st
 import os
 import pandas as pd
@@ -21,8 +19,9 @@ API_KEY = os.environ.get("GEMINI_API_KEY")
 if not API_KEY:
     st.error("❌ API Anahtarı bulunamadı. Lütfen Streamlit Cloud'da 'GEMINI_API_KEY' Secret'ını ayarlayın.")
     st.stop()
-
-# ----------------------------------------------------------------------
+# Hata çözümü için langsmith takibini uygulama seviyesinde devre dışı bırakma
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ["LANGCHAIN_SESSION"] = "false"# ----------------------------------------------------------------------
 # 2. RAG Bileşenleri Tanımları (FONKSİYONLAR BURADA BAŞLAR)
 # ----------------------------------------------------------------------
 
