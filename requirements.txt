@@ -8,7 +8,10 @@ langchain
 langchain-chroma
 langchain-google-genai
 
-# Kritik Alt Bağımlılıklar (Uyumluluk sorunlarını çözmek için eklenmiştir)
+# Kritik Alt Bağımlılıklar (Uyumluluk ve Hata Çözümü İçin)
+# Bu paketler olmadan LangChain'in ana modülleri düzgün yüklenemeyebilir:
 pydantic==1.10.13
 google-auth
 protobuf
+grpcio
+typing-extensions  # Bazen Python sürümü uyumluluğu için gereklidir
