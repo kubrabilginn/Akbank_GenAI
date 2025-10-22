@@ -1,13 +1,13 @@
+# Uygulamanın çalışması için KESİNLİKLE gereken temel paketler
 streamlit
 pandas
 datasets
 
-# LangChain'in en son stabil sürümünü belirtin (Çekirdek paketi)
+# LangChain'i çekirdek bağımlılıklardan korumalı modda yüklemeye zorlar.
 langchain
-
-# Google ve Chroma bağlayıcılarını ayrı ayrı tutun
 langchain-chroma
 langchain-google-genai
 
-# Çakışmaya neden olan alt bağımlılıkları kaldırdık.
-# Python 3.10'da bunların otomatik çözülmesini umuyoruz.
+# Çakışmayı önlemek için minimum bağımlılıklar
+pydantic==1.10.13
+protobuf==3.20.3
