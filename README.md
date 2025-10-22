@@ -46,17 +46,19 @@ Bağımlılıkların Yüklenmesi:
 
 Bash
 
-pip install -r requirements.txt
+```pip install -r requirements.txt```
+
 API Anahtarının Tanımlanması: Gemini API Anahtarınızı ortam değişkeni olarak ayarlayın:
 
 Bash
 
-export GEMINI_API_KEY="SİZİN_ANAHTARINIZ"
+```export GEMINI_API_KEY="SİZİN_ANAHTARINIZ"```
 Uygulamanın Başlatılması:
 
 Bash
 
-streamlit run app.py
+```streamlit run app.py```
+
 6. 🔗 Web Arayüzü Linki (Product Kılavuzu)
 Projenin Streamlit Cloud'da çalışan kalıcı web linki aşağıdadır. Uygulamayı test etmek için bu linki kullanın.
 
