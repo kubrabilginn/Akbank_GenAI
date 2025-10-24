@@ -2,7 +2,7 @@ streamlit
 pandas
 datasets
 numpy
-sentence-transformers # Embedding için
-huggingface_hub      # LLM için Inference API istemcisi
-protobuf==3.20.3     # Stabilite için tutalım
-setuptools           # distutils hatası için tutalım
+sentence-transformers
+huggingface_hub
+protobuf==3.20.3
+setuptools
