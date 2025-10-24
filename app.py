@@ -90,47 +90,35 @@ if query:
     st.session_state.history.append({"role": "user", "content": query})
 
     with st.spinner("Tarif aranıyor..."):
-    # Tarif metinlerinin embedding'ini oluşturma
-    recipe_embeddings = []
-    for doc in recipe_docs:
-        res = client.models.embed_content(
+        # Girintili blok burada başlıyor!
+        recipe_embeddings = []
+        for doc in docs:
+            res = client.models.embed_content(
+                model=embedding_model,
+                content=doc  # Gemini embed parametresi
+            )
+            recipe_embeddings.append(res.embedding.values)
+        embeddings = np.array(recipe_embeddings)
+
+        # Sorgu embed
+        q_res = client.models.embed_content(
             model=embedding_model,
-            content=doc  # 'content' parametresi kullanılıyor
+            content=query
         )
-        recipe_embeddings.append(res.embedding.values)
-    embeddings = np.array(recipe_embeddings)
+        q_embed = q_res.embedding.values
 
-    # Sorgu için embedding
-    q_res = client.models.embed_content(
-        model=embedding_model,
-        content=query  # 'content' parametresi kullanılıyor
-    )
-    q_embed = q_res.embedding.values
+        # Cosine similarity hesapla
+        sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
+        sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
 
-    # Cosine similarity hesaplama
-    sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
-    sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
+        top_docs = [docs[i] for i, _ in sims]
 
-    top_docs = [docs[i] for i, _ in sims]
+        if not top_docs:
+            answer = "Üzgünüm, uygun tarif bulamadım."
+        else:
+            prompt = f"""
+Aşağıda yemek tarifleri var. Kullanı
 
-    if not top_docs:
-        answer = "Üzgünüm, uygun tarif bulamadım."
-    else:
-        prompt = f"""
-Aşağıda yemek tarifleri var. Kullanıcının sorusuna yardımcı ol:
-
-BAĞLAM:
-{"\n---\n".join(top_docs)}
-
-SORU: {query}
-YANIT:
-"""
-        answer = client.models.generate_content(
-            model=llm_model,
-            contents=prompt
-        ).text
-
-    st.session_state.history.append({"role": "assistant", "content": answer})
 
 for msg in st.session_state.history:
     with st.chat_message(msg["role"]):
