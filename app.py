@@ -100,24 +100,16 @@ if "history" not in st.session_state:
 
 query = st.chat_input("Ne pişirmek istersin? (örn: Ispanaklı bir şey)")
 
+# app.py dosyasındaki if query: bloğunun içindeki try...except bölümü
+
 if query:
     st.session_state.history.append({"role": "user", "content": query})
 
     with st.spinner("Tarif aranıyor ve yanıt oluşturuluyor..."):
         try:
-            # 1. Sorgu embed (Sentence Transformer ile)
-            q_embed = np.array(embedding_model.encode(query))
-
-            # 2. Cosine similarity hesapla (Değişiklik yok)
-            sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
-            sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
-
-            # 3. En iyi dokümanları al (Değişiklik yok)
-            top_docs_content = [docs[i] for i, _ in sims]
-            source_names = [doc.split('\n')[0].replace('TARİF ADI: ', '') for doc in top_docs_content]
-            context = "\n---\n".join(top_docs_content)
-
-            # 4. Prompt oluşturma (Modelin formatına uygun hale getirme - Mistral/Zephyr için)
+            # ... (Embedding ve Arama kodları aynı kalır) ...
+            
+            # 4. Prompt oluşturma (Değişiklik yok)
             prompt = f"""<s>[INST] Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver. 
 Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla.
 
@@ -130,21 +122,30 @@ YANIT:"""
             # 5. Hugging Face Inference API'sine gönderme
             response = hf_client.text_generation(
                 prompt,
-                max_new_tokens=250, # Üretilecek maksimum token sayısı
+                max_new_tokens=250, 
                 temperature=0.7,
                 top_p=0.9,
                 repetition_penalty=1.1
             )
             
-            llm_response = response.strip() # Gelen yanıtı temizle
+            llm_response = response.strip() 
 
-            # Geçmişe ekle
             st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_names})
 
+        # 🛑 HATA YAKALAMAYI DETAYLANDIRDIK 🛑
         except Exception as e:
-            st.error(f"RAG/API Hatası: {str(e)}")
-            st.session_state.history.append({"role": "assistant", "content": f"Üzgünüm, bir hata oluştu: {e}", "sources": []})
+            import traceback # Traceback'i yazdırmak için import et
+            tb_str = traceback.format_exc() # Hatanın tam traceback'ini al
+            
+            # Hem arayüze hem de loglara detaylı hata yazdır
+            error_msg = f"RAG/API Hatası Oluştu!\nDetaylar:\n{str(e)}\n\nTraceback:\n{tb_str}"
+            st.error(error_msg) # Arayüzde göster
+            print(error_msg)    # Streamlit loglarına yazdır
+            
+            # Geçmişe basit hata mesajı ekle
+            st.session_state.history.append({"role": "assistant", "content": f"Üzgünüm, bir hata oluştu: {str(e)}", "sources": []})
 
+# ... (Geçmişi gösterme kodu aynı kalır) ...
 
 # Geçmişi gösterme (Değişiklik yok)
 for msg in st.session_state.history:
