@@ -2,9 +2,5 @@ streamlit
 pandas
 datasets
 numpy
-
-# 🛑 KESİN DÜZELTME: Doğru paket adını ve stabil bir versiyon aralığını kullanıyoruz
-google-generativeai>=0.5.0,<1.0.0 
-
-# Uyumsuzluk çıkaran protobuf'u sabit tutalım
-protobuf==3.20.3
+google-generativeai>=0.5.0,<1.0.0
+setuptools # <-- Add this line to fix the distutils error
