@@ -5,29 +5,29 @@ import numpy as np
 from typing import List
 import traceback # Hata ayıklama için
 
-# Hugging Face Kütüphaneleri
-from huggingface_hub import InferenceClient
-from sentence_transformers import SentenceTransformer
+# Gerekli Kütüphaneler
+from sentence_transformers import SentenceTransformer # Embedding için
+from groq import Groq                             # LLM için
 from datasets import load_dataset
 
 # ------------------------------------------------
-# Hugging Face API Token (Opsiyonel ama Önerilir)
+# API Key kontrolü (Artık Groq için)
 # ------------------------------------------------
-HF_TOKEN = os.environ.get("HF_TOKEN")
-# if not HF_TOKEN:
-#     st.warning("Hugging Face API Token bulunamadı. Ücretsiz limitlerle devam ediliyor.")
-
-# Model isimleri
-embedding_model_name = 'all-MiniLM-L6-v2'
-llm_model_name = "mistralai/Mistral-7B-Instruct-v0.1"
-
-# Hugging Face Inference Client'ı başlatma
-try:
-    hf_client = InferenceClient(model=llm_model_name, token=HF_TOKEN)
-except Exception as e:
-    st.error(f"Hugging Face Inference Client başlatılırken hata: {e}")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    st.error("❌ Groq API Anahtarı bulunamadı. Streamlit Secrets bölümüne GROQ_API_KEY ekleyin.")
     st.stop()
 
+# Groq İstemcisini başlatma
+try:
+    groq_client = Groq(api_key=GROQ_API_KEY)
+except Exception as e:
+    st.error(f"Groq istemcisi başlatılırken hata: {e}")
+    st.stop()
+
+# Model isimleri
+embedding_model_name = 'all-MiniLM-L6-v2' # HF Embedding
+llm_model_name = "llama3-8b-8192" # Groq'ta bulunan hızlı bir model (veya "mixtral-8x7b-32768")
 
 # ------------------------------------------------
 # Sentence Transformer Modelini Yükleme (Cache ile)
@@ -43,14 +43,11 @@ def load_embedding_model():
         st.stop()
 
 # ------------------------------------------------
-# Tarifleri yükleme
+# Tarifleri yükleme (Değişiklik yok)
 # ------------------------------------------------
 @st.cache_data(show_spinner="Tarifler yükleniyor...")
 def load_recipes() -> list[str]:
-    """
-    Hugging Face datasets üzerinden yemek tariflerini yükler.
-    İlk 200 tarifi alır ve Title + Ingredients + Instructions şeklinde birleştirir.
-    """
+    """Hugging Face datasets üzerinden yemek tariflerini yükler (200 adet)."""
     try:
         ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
         recipes = []
@@ -97,9 +94,8 @@ def load_data_and_embeddings(_embedding_model):
         st.stop()
 
 
-# ✅ Kosinüs benzerliği
+# ✅ Kosinüs benzerliği (Değişiklik yok)
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """İki NumPy vektörü arasındaki kosinüs benzerliğini hesaplar."""
     norm_a = np.linalg.norm(a)
     norm_b = np.linalg.norm(b)
     if norm_a == 0 or norm_b == 0:
@@ -111,7 +107,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # UI
 # ------------------------------------------------
 st.set_page_config(page_title="Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (HF Embedding + HF LLM)")
+st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (HF Embedding + Groq LLM)")
 st.divider()
 
 # Embedding modelini yükle
@@ -119,7 +115,7 @@ embedding_model = load_embedding_model()
 # Veri ve embeddingleri yükle
 docs, ids, embeddings = load_data_and_embeddings(embedding_model)
 
-st.caption(f"Veri tabanımızda {len(docs)} tarif bulunmaktadır. (LLM: {llm_model_name} | Embedding: {embedding_model_name})")
+st.caption(f"Veri tabanımızda {len(docs)} tarif bulunmaktadır. (LLM: {llm_model_name} @ Groq | Embedding: {embedding_model_name})")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -140,47 +136,49 @@ if query:
                  st.stop()
 
             sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
-            sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3] # En iyi 3 sonucu al
+            sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
 
             # 3. En iyi dokümanları (context) al
-            # 🛑 DÜZELTME: Benzerlik eşiğini kaldırdık! Artık en benzer 3 her zaman alınacak.
             top_docs_content = [docs[i] for i, score in sims]
-
             if not top_docs_content:
-                 # Bu durum artık sadece embedding/arama hatası olursa gerçekleşmeli
-                 llm_response = "Üzgünüm, arama sırasında bir sorun oluştu."
+                 llm_response = "Üzgünüm, bu isteğe uygun bir tarif bulamadım."
                  source_names = []
             else:
                 source_names = [doc.split('\n')[0].replace('TARİF ADI: ', '') for doc in top_docs_content]
                 context = "\n---\n".join(top_docs_content)
 
-                # 4. Prompt oluşturma (Mistral/Zephyr formatı)
-                prompt = f"""<s>[INST] Aşağıdaki bağlamda sana verilen yemek tariflerini kullanarak, kullanıcının sorusuna detaylı ve yardımcı bir şekilde yanıt ver.
-Eğer bağlamda uygun tarif bulamazsan, kibarca sadece "Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım." diye yanıtla. Yanıtını sadece Türkçe ver.
-
-BAĞLAM:
+                # 4. Prompt oluşturma (Groq için mesaj formatı)
+                # Llama3 ve Mixtral genellikle bu formatı anlar
+                system_prompt = """Sen yardımsever bir yemek tarifi asistanısın. Sana verilen bağlamdaki tarifleri kullanarak kullanıcının sorusuna cevap ver. Eğer bağlamda uygun tarif yoksa, sadece 'Üzgünüm, veri tabanımda bu isteğe uygun bir tarif bulamadım.' de. Yanıtını sadece Türkçe ver."""
+                user_prompt = f"""BAĞLAM:
 {context}
 
-SORU: {query} [/INST]
-YANIT:"""
+SORU: {query}"""
 
-                # 5. Hugging Face Inference API'sine gönderme
-                response = hf_client.text_generation(
-                    prompt,
-                    max_new_tokens=300,
+                # 5. Groq API'sine gönderme
+                chat_completion = groq_client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt
+                        },
+                        {
+                            "role": "user",
+                            "content": user_prompt,
+                        }
+                    ],
+                    model=llm_model_name,
                     temperature=0.7,
+                    max_tokens=300,
                     top_p=0.9,
-                    repetition_penalty=1.1,
-                    do_sample=True
                 )
 
-                llm_response = response.strip()
+                llm_response = chat_completion.choices[0].message.content.strip()
 
             # Geçmişe ekle
             st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_names})
 
         except Exception as e:
-            # Hata yakalamayı detaylandırdık
             tb_str = traceback.format_exc()
             error_msg = f"RAG/API Hatası Oluştu!\nDetaylar:\n{str(e)}\n\nTraceback:\n{tb_str}"
             st.error(error_msg)
@@ -188,7 +186,7 @@ YANIT:"""
             st.session_state.history.append({"role": "assistant", "content": f"Üzgünüm, bir hata oluştu: {str(e)}", "sources": []})
 
 
-# Geçmişi gösterme
+# Geçmişi gösterme (Değişiklik yok)
 for msg in st.session_state.history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -200,5 +198,4 @@ for msg in st.session_state.history:
                  for name in set(sources):
                      st.markdown(f"**-** *{name}*")
             else:
-                 # Eğer kaynak yoksa (yani LLM context bulamadıysa veya hata oluştuysa)
                  st.markdown("*Bu yanıt için özel bir tarif kullanılmadı veya bulunamadı.*")
