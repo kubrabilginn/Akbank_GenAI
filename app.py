@@ -90,14 +90,14 @@ if query:
     st.session_state.history.append({"role": "user", "content": query})
 
     with st.spinner("Tarif aranıyor..."):
-    # Sorgu için embedding
-    q_res = client.models.embed_content(
-        model=embedding_model,
-        text=query   # 'text' parametresi tekil metin için kullanılıyor
-    )
-    q_embed = q_res.embedding.values
+        # Sorgu için embedding
+        q_res = client.models.embed_content(
+            model=embedding_model,
+            text=query   # 'text' parametresi tekil metin için kullanılıyor
+        )
+        q_embed = q_res.embedding.values
 
-
+        # Cosine similarity hesaplama
         sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
         sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
 
