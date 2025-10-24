@@ -1,161 +1,103 @@
 import streamlit as st
 import os
 import pandas as pd
-import chromadb
+import numpy as np
 from datasets import load_dataset
-from typing import List
+from typing import List, Tuple
 
 from google import genai
 from google.genai import types
 
-from chromadb.api.types import EmbeddingFunction
-
+# ------------------------------------------------
+# API Key kontrolü
+# ------------------------------------------------
 API_KEY = os.environ.get("GEMINI_API_KEY")
-
 if not API_KEY:
-    st.error("❌ API Key bulunamadı. Streamlit Secrets kısmına GEMINI_API_KEY ekleyin.")
+    st.error("❌ API Anahtarı bulunamadı. Streamlit Secrets bölümüne GEMINI_API_KEY ekleyin.")
     st.stop()
 
-
-@st.cache_resource
-def get_ai_client():
-    return genai.Client(api_key=API_KEY)
-
-
-@st.cache_data
-def load_and_prepare_data():
-    dataset = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
-    df = dataset.to_pandas()
-    df['full_recipe'] = df.apply(
-        lambda row: f"TARİF ADI: {row['Title']}\nMALZEMELER: {', '.join(row['Ingredients'])}\nADIMLAR: {row['Instructions']}",
-        axis=1
-    )
-    df['id'] = [f"doc_{i}" for i in range(len(df))]
-    return df['full_recipe'].tolist(), df['id'].tolist()
-
-
-# ----------------------------------------------------------------------
-# ✅ Chroma İçin Uyumlu Embedding Sınıfı
-# ----------------------------------------------------------------------
-class ChromaGeminiEmbedFunction(EmbeddingFunction):
-    def __init__(self, client):
-        self.client = client
-        self.model = "models/text-embedding-004"
-        self._ef_name = "gemini_chroma_wrapper"
-
-    def name(self):
-        return self._ef_name
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        vectors = []
-        for t in texts:
-            res = self.client.models.embed_content(
-                model=self.model,
-                input=t
-            )
-            vectors.append(res.embedding.values)
-        return vectors
-
-    def embed_query(self, text: str) -> List[float]:
-        res = self.client.models.embed_content(
-            model=self.model,
-            input=text
-        )
-        return res.embedding.values
-
-    def __call__(self, texts: List[str]) -> List[List[float]]:
-        return self.embed_documents(texts)
-
-
-# ----------------------------------------------------------------------
-# ✅ ChromaDB Bağlantısı - Bellek içi
-# ----------------------------------------------------------------------
-@st.cache_resource
-def get_chroma_db(recipe_docs, doc_ids):
-    client = get_ai_client()
-    embed_fn = ChromaGeminiEmbedFunction(client)
-
-    chroma_client = chromadb.Client()
-
-    collection_name = "yemek_tarifleri_rag"
-
-    try:
-        collection = chroma_client.get_collection(
-            name=collection_name,
-            embedding_function=embed_fn
-        )
-    except:
-        collection = chroma_client.create_collection(
-            name=collection_name,
-            embedding_function=embed_fn
-        )
-
-    if collection.count() == 0:
-        collection.add(
-            documents=recipe_docs,
-            ids=doc_ids
-        )
-
-    return collection
-
-
-# ----------------------------------------------------------------------
-# ✅ Uygulama Arayüzü
-# ----------------------------------------------------------------------
-recipe_docs, doc_ids = load_and_prepare_data()
-db_collection = get_chroma_db(recipe_docs, doc_ids)
-ai_client = get_ai_client()
+client = genai.Client(api_key=API_KEY)
+embedding_model = "models/text-embedding-004"
 llm_model = "gemini-2.5-flash"
 
+
+# ------------------------------------------------
+# Veri ve Embedding Cache
+# ------------------------------------------------
+@st.cache_data(show_spinner=True)
+def load_data_and_embeddings() -> Tuple[List[str], List[str], List[List[float]]]:
+    dataset = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
+    df = dataset.to_pandas()
+
+    docs = df.apply(
+        lambda row: f"TARİF ADI: {row['Title']}\nMALZEMELER: {', '.join(row['Ingredients'])}\nADIMLAR: {row['Instructions']}",
+        axis=1
+    ).tolist()
+
+    ids = [f"doc_{i}" for i in range(len(docs))]
+
+    embeddings = []
+    for text in docs:
+        res = client.models.embed_content(model=embedding_model, input=text)
+        embeddings.append(res.embedding.values)
+
+    return docs, ids, embeddings
+
+
+# ✅ Kosinüs benzerliği
+def cosine_similarity(a: List[float], b: List[float]) -> float:
+    a = np.array(a)
+    b = np.array(b)
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+# ------------------------------------------------
+# UI
+# ------------------------------------------------
 st.set_page_config(page_title="Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Yemek Tarifleri Chatbotu")
-st.caption(f"Veri tabanında {len(recipe_docs)} tarif mevcut.")
+st.title("🍽️ Yemek Tarifleri Chatbotu (Chroma’sız tam uyumlu)")
 st.divider()
 
-if 'history' not in st.session_state:
+docs, ids, embeddings = load_data_and_embeddings()
+
+if "history" not in st.session_state:
     st.session_state.history = []
 
-user_query = st.chat_input("Tarif sorunuzu girin...")
+query = st.chat_input("Ne pişirmek istersin? (örn: Ispanaklı bir şey)")
 
-if user_query:
-    st.session_state.history.append({"role": "user", "content": user_query})
+if query:
+    st.session_state.history.append({"role": "user", "content": query})
 
     with st.spinner("Tarif aranıyor..."):
-        try:
-            results = db_collection.query(
-                query_texts=[user_query],
-                n_results=3,
-                include=['documents']
-            )
+        q_embed = client.models.embed_content(
+            model=embedding_model, input=query
+        ).embedding.values
 
-            docs = results['documents'][0] if results['documents'] else []
-            context = "\n---\n".join(docs)
+        sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
+        sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
 
-            if not docs:
-                llm_response = "Üzgünüm, uygun tarif bulamadım."
-            else:
-                PROMPT = f"""
-Aşağıdaki içerik yemek tarifleridir. Kullanıcının sorusuna yardımcı olacak şekilde yanıt üret.
+        top_docs = [docs[i] for i, _ in sims]
+
+        if not top_docs:
+            answer = "Üzgünüm, uygun tarif bulamadım."
+        else:
+            prompt = f"""
+Aşağıda yemek tarifleri var. Kullanıcının sorusuna yardımcı ol:
 
 BAĞLAM:
-{context}
+{"\n---\n".join(top_docs)}
 
-SORU: {user_query}
+SORU: {query}
 YANIT:
 """
+            answer = client.models.generate_content(
+                model=llm_model,
+                contents=prompt
+            ).text
 
-                response = ai_client.models.generate_content(
-                    model=llm_model,
-                    contents=PROMPT
-                )
-                llm_response = response.text
-
-            st.session_state.history.append({"role": "assistant", "content": llm_response})
-
-        except Exception as e:
-            st.session_state.history.append({"role": "assistant", "content": f"Hata: {e}"})
+        st.session_state.history.append({"role": "assistant", "content": answer})
 
 
-for message in st.session_state.history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+for msg in st.session_state.history:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
