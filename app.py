@@ -40,10 +40,13 @@ def load_embedding_model():
 # ------------------------------------------------
 # Tarifleri yükleme (Değişiklik yok)
 # ------------------------------------------------
+# app.py dosyasındaki load_recipes fonksiyonunu bulun:
+
 @st.cache_data(show_spinner="Tarifler yükleniyor...")
 def load_recipes() -> list[str]:
-    # Veri miktarını düşük tutalım (50 tarif)
-    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:50]") 
+    # 🛑 DEĞİŞİKLİK BURADA: 50 yerine 200 tarif yükle
+    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]") 
+    # ... (fonksiyonun geri kalanı aynı) ...
     recipes = []
     for item in ds:
         title = item.get("Title", "")
