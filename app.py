@@ -90,23 +90,33 @@ if query:
     st.session_state.history.append({"role": "user", "content": query})
 
     with st.spinner("Tarif aranıyor..."):
-        # Sorgu için embedding
-        q_res = client.models.embed_content(
+    # Tarif metinlerinin embedding'ini oluşturma
+    recipe_embeddings = []
+    for doc in recipe_docs:
+        res = client.models.embed_content(
             model=embedding_model,
-            text=query   # 'text' parametresi tekil metin için kullanılıyor
+            content=doc  # 'content' parametresi kullanılıyor
         )
-        q_embed = q_res.embedding.values
+        recipe_embeddings.append(res.embedding.values)
+    embeddings = np.array(recipe_embeddings)
 
-        # Cosine similarity hesaplama
-        sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
-        sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
+    # Sorgu için embedding
+    q_res = client.models.embed_content(
+        model=embedding_model,
+        content=query  # 'content' parametresi kullanılıyor
+    )
+    q_embed = q_res.embedding.values
 
-        top_docs = [docs[i] for i, _ in sims]
+    # Cosine similarity hesaplama
+    sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
+    sims = sorted(sims, key=lambda x: x[1], reverse=True)[:3]
 
-        if not top_docs:
-            answer = "Üzgünüm, uygun tarif bulamadım."
-        else:
-            prompt = f"""
+    top_docs = [docs[i] for i, _ in sims]
+
+    if not top_docs:
+        answer = "Üzgünüm, uygun tarif bulamadım."
+    else:
+        prompt = f"""
 Aşağıda yemek tarifleri var. Kullanıcının sorusuna yardımcı ol:
 
 BAĞLAM:
@@ -115,12 +125,12 @@ BAĞLAM:
 SORU: {query}
 YANIT:
 """
-            answer = client.models.generate_content(
-                model=llm_model,
-                contents=prompt
-            ).text
+        answer = client.models.generate_content(
+            model=llm_model,
+            contents=prompt
+        ).text
 
-        st.session_state.history.append({"role": "assistant", "content": answer})
+    st.session_state.history.append({"role": "assistant", "content": answer})
 
 for msg in st.session_state.history:
     with st.chat_message(msg["role"]):
