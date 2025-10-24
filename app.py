@@ -27,7 +27,7 @@ except Exception as e:
 
 # Model isimleri
 embedding_model_name = 'all-MiniLM-L6-v2' # HF Embedding
-llm_model_name = "llama3-8b-8192" # Groq'ta bulunan hızlı bir model (veya "mixtral-8x7b-32768")
+llm_model_name = "llama3-70b-8192" # Replace decommissioned model with Llama 3 70b # Groq'ta bulunan hızlı bir model (veya "mixtral-8x7b-32768")
 
 # ------------------------------------------------
 # Sentence Transformer Modelini Yükleme (Cache ile)
