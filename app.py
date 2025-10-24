@@ -29,7 +29,8 @@ from datasets import load_dataset
 
 @st.cache_data(show_spinner="Tarifler yükleniyor...")
 def load_recipes() -> list[str]:
-    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
+    # Örneğin, sadece 50 tarif yüklemek için:
+    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:50]")
     recipes = []
     for item in ds:
         title = item.get("Title", "")
