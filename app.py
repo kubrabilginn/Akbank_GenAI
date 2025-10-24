@@ -27,7 +27,7 @@ except Exception as e:
 
 # Model isimleri
 embedding_model_name = 'all-MiniLM-L6-v2' # HF Embedding
-llm_model_name = "mixtral-8x7b-32768" # Switch to Mixtral as Llama3 models are decommissioned
+llm_model_name = "gemma-7b-it" # Switch to Gemma as Mixtral is also decommissioned
 # ------------------------------------------------
 # Sentence Transformer Modelini Yükleme (Cache ile)
 # ------------------------------------------------
