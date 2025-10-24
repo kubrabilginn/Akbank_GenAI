@@ -22,25 +22,25 @@ llm_model = "gemini-2.5-flash"
 # ------------------------------------------------
 # Tarifleri yükleme
 # ------------------------------------------------
+from datasets import load_dataset
+
 @st.cache_data(show_spinner="Tarifler yükleniyor...")
-def load_recipes() -> List[str]:
+def load_recipes() -> list[str]:
     """
-    Tarif verilerini yükler ve liste olarak döner.
-    Bu örnekte CSV’den yükleme yapıyoruz, dilersen JSON veya başka bir kaynaktan da olabilir.
+    Hugging Face datasets üzerinden yemek tariflerini yükler.
+    İlk 200 tarifi alır ve Title + Ingredients + Instructions şeklinde birleştirir.
     """
-    data_path = "recipes.csv"  # CSV dosyanın yolu
-    if not os.path.exists(data_path):
-        st.error(f"❌ Tarif dosyası bulunamadı: {data_path}")
-        st.stop()
+    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
+    recipes = []
+
+    for item in ds:
+        title = item.get("Title", "")
+        ingredients = item.get("Ingredients", "")
+        instructions = item.get("Instructions", "")
+        full_recipe = f"{title}\nMalzemeler: {ingredients}\nYapılışı: {instructions}"
+        recipes.append(full_recipe)
     
-    df = pd.read_csv(data_path)
-    
-    # Tarifi içeren sütun adı 'recipe_text' olduğunu varsayıyoruz
-    if 'recipe_text' not in df.columns:
-        st.error("❌ CSV içinde 'recipe_text' sütunu bulunamadı.")
-        st.stop()
-    
-    return df['recipe_text'].tolist()
+    return recipes
 
 # ------------------------------------------------
 # Veri ve Embedding Cache
