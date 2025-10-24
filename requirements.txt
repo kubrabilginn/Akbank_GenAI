@@ -1,10 +1,5 @@
-# Temel Kütüphaneler
 streamlit
 pandas
 datasets
 numpy
-
-# RAG için gerekli olan, LangChain'den bağımsız paketler
-google-genai  # Google'ın kendi SDK'sı (LLM ve Embedding için)
-chromadb
-protobuf==3.20.3 # Uyumsuzluk çıkardığı bilinen bir paketi eski, güvenli versiyonda tutalım
+google-genai # Sadece bu gerekli
