@@ -24,26 +24,25 @@ llm_model = "gemini-2.5-flash"
 # ------------------------------------------------
 # Veri ve Embedding Cache
 # ------------------------------------------------
-@st.cache_data(show_spinner=True)
-def load_data_and_embeddings() -> Tuple[List[str], List[str], List[List[float]]]:
-    dataset = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:200]")
-    df = dataset.to_pandas()
+@st.cache_data(show_spinner="Veriler yükleniyor...")
+def load_data_and_embeddings():
+    recipe_docs = load_recipes()
+    doc_ids = [f"doc_{i}" for i in range(len(recipe_docs))]
 
-    docs = df.apply(
-        lambda row: f"TARİF ADI: {row['Title']}\nMALZEMELER: {', '.join(row['Ingredients'])}\nADIMLAR: {row['Instructions']}",
-        axis=1
-    ).tolist()
+    # Embed modelleri bu formatla çağrılmalı
+    embed_request = {
+        "model": embedding_model,
+        "texts": recipe_docs
+    }
 
-    ids = [f"doc_{i}" for i in range(len(docs))]
+    try:
+        res = client.models.embed_content(**embed_request)
+        embeds = res.embeddings
+    except Exception as e:
+        st.error(f"Embedding oluşturulurken hata: {str(e)}")
+        raise e
 
-    embeddings = []
-    for text in docs:
-        res = client.models.embed_content(model=embedding_model, input=text)
-        embeddings.append(res.embedding.values)
-
-    return docs, ids, embeddings
-
-
+    return recipe_docs, doc_ids, embeds
 # ✅ Kosinüs benzerliği
 def cosine_similarity(a: List[float], b: List[float]) -> float:
     a = np.array(a)
