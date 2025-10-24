@@ -42,28 +42,50 @@ def load_and_prepare_data():
 
 
 # --- ChromaDB Uyumlu Embedding Wrapper Sınıfı ---
-class ChromaGeminiEmbedFunction:
-    """ChromaDB'nin beklediği arayüzü sağlayan özel sınıf."""
+from chromadb.api.types import EmbeddingFunction
+
+class ChromaGeminiEmbedFunction(EmbeddingFunction):
+    """ChromaDB'nin embedding arayüzü ile tamamen uyumlu özel sınıf."""
     
     def __init__(self, client):
         self.client = client
-        self._name = "gemini_custom_embedder_v5" # Sabit isim
-        self.model = "embedding-001"
+        self.model = "models/text-embedding-004"  # En stabil embedding modeli
+        self._ef_name = "gemini_chroma_wrapper_v1"
 
     def name(self):
-        return self._name
+        return self._ef_name
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        response = self.client.models.batch_embed_content(
+        """Birden fazla dokümanı embed eder."""
+        response = self.client.models.embed_content(
             model=self.model,
-            contents=texts
+            input=texts
         )
-        return [r.values for r in response.embeddings]
+
+        # SDK: tek bir request = tek bir embedding array döndürür
+        # Chroma: her metin için ayrı embedding ister
+        # O yüzden her text için embed işlemini tekrarlıyoruz:
+        vectors = []
+        for t in texts:
+            res = self.client.models.embed_content(
+                model=self.model,
+                input=t
+            )
+            vectors.append(res.embedding.values)
+
+        return vectors
+    
+    def embed_query(self, text: str) -> List[float]:
+        """Tek bir sorgu embed eder."""
+        response = self.client.models.embed_content(
+            model=self.model,
+            input=text
+        )
+        return response.embedding.values
     
     def __call__(self, texts: List[str]) -> List[List[float]]:
         return self.embed_documents(texts)
-    
-# --- Wrapper Sınıfı Sonu ---
+# --- Wrapper Sonu ---
 
 
 @st.cache_resource
