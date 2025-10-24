@@ -145,4 +145,4 @@ for msg in st.session_state.history:
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and msg.get("sources"):
             st.markdown("---")
-            st.markdown("**Kullanılan Kaynak Tarifler:**)
+            st.markdown("**Kullanılan Kaynak Tarifler:**")
