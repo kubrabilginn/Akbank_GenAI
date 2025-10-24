@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 from typing import List
 
-# Google SDK (Sadece LLM için)
-from google import genai
+
 # Sentence Transformers (Embedding için)
 from sentence_transformers import SentenceTransformer
 
