@@ -3,4 +3,8 @@ pandas
 datasets
 numpy
 google-generativeai>=0.5.0,<1.0.0
-setuptools # <-- Add this line to fix the distutils error
+protobuf==3.20.3
+setuptools
+
+# YENİ EKLEME: Ücretsiz embedding için
+sentence-transformers
