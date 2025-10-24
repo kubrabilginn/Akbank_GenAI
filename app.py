@@ -50,19 +50,19 @@ def load_data_and_embeddings():
     recipe_docs = load_recipes()
     doc_ids = [f"doc_{i}" for i in range(len(recipe_docs))]
 
-    embed_request = {
-        "model": embedding_model,
-        "texts": recipe_docs
-    }
-
     try:
-        res = client.models.embed_content(**embed_request)
-        embeds = res.embeddings
+        # input parametresi kullanılmalı
+        res = client.models.embed_content(
+            model=embedding_model,
+            input=recipe_docs
+        )
+        embeds = [e.values for e in res.embeddings]  # embeddingleri listeye çevir
     except Exception as e:
         st.error(f"Embedding oluşturulurken hata: {str(e)}")
         raise e
 
     return recipe_docs, doc_ids, embeds
+
 
 # ✅ Kosinüs benzerliği
 def cosine_similarity(a: List[float], b: List[float]) -> float:
