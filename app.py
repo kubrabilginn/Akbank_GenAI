@@ -85,7 +85,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # UI
 # ------------------------------------------------
 st.set_page_config(page_title="Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (HF Embedding + HF LLM)")
+st.title("🍽️ GenAI Yemek Tarifleri Chatbotu 🥗")
 st.divider()
 
 # Embedding modelini yükle
