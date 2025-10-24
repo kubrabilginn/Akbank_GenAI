@@ -4,23 +4,38 @@ import pandas as pd
 import numpy as np
 from typing import List
 
-# 🛑 DÜZELTME: Doğru kütüphane adını import ediyoruz
-import google.generativeai as genai 
-# from google.genai import types <-- Artık buna gerek yok veya farklı import edilmeli
+# Google SDK (Sadece LLM için)
+from google import genai
+# Sentence Transformers (Embedding için)
+from sentence_transformers import SentenceTransformer
 
 # ------------------------------------------------
-# API Key kontrolü (Secrets'tan okunur)
+# API Key kontrolü (Sadece LLM için gerekli)
 # ------------------------------------------------
 API_KEY = os.environ.get("GEMINI_API_KEY")
 if not API_KEY:
-    st.error("❌ API Anahtarı bulunamadı. Streamlit Secrets bölümüne GEMINI_API_KEY ekleyin.")
+    st.error("❌ Google API Anahtarı bulunamadı (LLM için gerekli). Streamlit Secrets bölümüne GEMINI_API_KEY ekleyin.")
     st.stop()
 
-# 🛑 genai.configure() çağrısını tamamen kaldırdık.
-# Kütüphanenin API_KEY'i ortam değişkeninden otomatik almasını bekliyoruz.
+# Google AI'ı sadece LLM için yapılandır
+try:
+    genai.configure(api_key=API_KEY)
+except Exception as e:
+    st.error(f"Google AI SDK yapılandırılırken hata (LLM için): {e}")
+    st.stop()
 
-embedding_model_name = "models/embedding-001"
-llm_model_name = "gemini-1.5-flash-latest" # Daha güncel ve genellikle daha iyi model
+# Model isimleri
+# 🛑 DÜZELTME: Embedding modeli artık Sentence Transformer
+embedding_model_name = 'all-MiniLM-L6-v2' # Popüler ve hızlı bir model
+llm_model_name = "gemini-1.5-flash-latest"
+
+# ------------------------------------------------
+# Sentence Transformer Modelini Yükleme (Cache ile)
+# ------------------------------------------------
+@st.cache_resource(show_spinner="Embedding modeli yükleniyor...")
+def load_embedding_model():
+    """Hugging Face'den Sentence Transformer modelini yükler."""
+    return SentenceTransformer(embedding_model_name)
 
 # ------------------------------------------------
 # Tarifleri yükleme (Değişiklik yok)
@@ -29,8 +44,8 @@ from datasets import load_dataset
 
 @st.cache_data(show_spinner="Tarifler yükleniyor...")
 def load_recipes() -> list[str]:
-    # Örneğin, sadece 50 tarif yüklemek için:
-    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:50]")
+    # ... (Fonksiyon içeriği aynı kalır) ...
+    ds = load_dataset("Hieu-Pham/kaggle_food_recipes", split="train[:50]") # 🛑 Veri miktarını azalttık (Limitleri zorlamamak için)
     recipes = []
     for item in ds:
         title = item.get("Title", "")
@@ -38,44 +53,30 @@ def load_recipes() -> list[str]:
         if isinstance(ingredients, list):
             ingredients = ", ".join(ingredients)
         instructions = item.get("Instructions", "")
-        full_recipe = f"TARİF ADI: {title}\nMALZEMELER: {ingredients}\nADIMLAR: {instructions}"
+        full_recipe = f"TARİF ADI: {title}\nMAL ингредиенттер: {ingredients}\nADIMLAR: {instructions}" # Malzemeler etiketini düzelttim
         recipes.append(full_recipe)
     return recipes
 
 # ------------------------------------------------
-# Veri ve Embedding Cache (configure olmadan)
+# Veri ve Embedding Cache (Sentence Transformer ile)
 # ------------------------------------------------
 @st.cache_data(show_spinner="Veriler ve embeddingler hazırlanıyor...")
-def load_data_and_embeddings():
+def load_data_and_embeddings(_embedding_model): # Model artık argüman olarak geliyor
     recipe_docs = load_recipes()
     doc_ids = [f"doc_{i}" for i in range(len(recipe_docs))]
 
     try:
-        # API anahtarı ortam değişkeninden otomatik alınmalı
-        # Güvenlik için configure'u buraya taşıyalım
-        genai.configure(api_key=API_KEY)
-        result = genai.embed_content(
-            model=embedding_model_name,
-            content=recipe_docs,
-            task_type="RETRIEVAL_DOCUMENT"
-        )
-        embeds = result['embedding']
-    except AttributeError as ae:
-         st.error(f"SDK Hatası: Gömme fonksiyonu bulunamadı veya yanlış çağrıldı. Hata: {ae}. Kütüphane sürümünü kontrol edin.")
-         st.stop()
+        # 🛑 DÜZELTME: Sentence Transformer ile embedding oluşturma
+        embeds = _embedding_model.encode(recipe_docs, show_progress_bar=False).tolist() # NumPy array'i listeye çevir
     except Exception as e:
-        if "API_KEY" in str(e).upper():
-             st.error(f"Embedding oluşturulurken API Anahtarı hatası: {str(e)}. Lütfen Secrets'ı kontrol edin.")
-        else:
-             st.error(f"Embedding oluşturulurken hata: {str(e)}")
+        st.error(f"Embedding oluşturulurken hata: {str(e)}")
         st.stop()
 
-    return recipe_docs, doc_ids, np.array(embeds)
+    return recipe_docs, doc_ids, np.array(embeds) # Embeddings'i NumPy array olarak döndür
 
 
 # ✅ Kosinüs benzerliği (Değişiklik yok)
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    # NaN kontrolü ekleyelim
     norm_a = np.linalg.norm(a)
     norm_b = np.linalg.norm(b)
     if norm_a == 0 or norm_b == 0:
@@ -86,13 +87,15 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # UI
 # ------------------------------------------------
 st.set_page_config(page_title="Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (Doğrudan SDK RAG)")
+st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (HF Embedding + Gemini LLM)")
 st.divider()
 
+# Embedding modelini yükle
+embedding_model = load_embedding_model()
 # Veri ve embeddingleri yükle
-docs, ids, embeddings = load_data_and_embeddings()
+docs, ids, embeddings = load_data_and_embeddings(embedding_model)
 
-st.caption(f"Veri tabanımızda {len(docs)} tarif bulunmaktadır. ({llm_model_name} ile güçlendirilmiştir)")
+st.caption(f"Veri tabanımızda {len(docs)} tarif bulunmaktadır. (LLM: {llm_model_name} | Embedding: {embedding_model_name})")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -104,13 +107,8 @@ if query:
 
     with st.spinner("Tarif aranıyor ve yanıt oluşturuluyor..."):
         try:
-            # 1. Sorgu embed (configure olmadan)
-            q_res = genai.embed_content(
-                model=embedding_model_name,
-                content=query,
-                task_type="RETRIEVAL_QUERY"
-            )
-            q_embed = np.array(q_res['embedding'])
+            # 1. Sorgu embed (Sentence Transformer ile)
+            q_embed = np.array(embedding_model.encode(query))
 
             # 2. Cosine similarity hesapla (Değişiklik yok)
             sims = [(i, cosine_similarity(q_embed, emb)) for i, emb in enumerate(embeddings)]
@@ -131,10 +129,9 @@ BAĞLAM:
 SORU: {query}
 YANIT:"""
 
-            # 5. LLM'ye gönderme (configure olmadan)
+            # 5. LLM'ye gönderme (Gemini kullanmaya devam ediyoruz)
             llm = genai.GenerativeModel(model_name=llm_model_name)
-            # Güvenlik ayarlarını gevşetme (opsiyonel, bazen yanıtları engeller)
-            safety_settings = [
+            safety_settings = [ # Güvenlik ayarları
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
@@ -142,26 +139,17 @@ YANIT:"""
             ]
             response = llm.generate_content(prompt, safety_settings=safety_settings)
 
-            # Yanıtı güvenli bir şekilde al
             try:
                 llm_response = response.text
-            except ValueError:
-                llm_response = "Modelden yanıt alınamadı veya yanıt engellendi."
-                # Engelleme nedenini logla (opsiyonel)
-                # print(response.prompt_feedback)
-
+            except ValueError: # Yanıt engellenirse
+                llm_response = "Modelden yanıt alınamadı veya yanıt güvenlik nedeniyle engellendi."
+                # print(response.prompt_feedback) # Geri bildirimi görmek için
 
             # Geçmişe ekle
             st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_names})
 
-        except AttributeError as ae:
-             st.error(f"SDK Hatası: Gerekli fonksiyon bulunamadı veya yanlış çağrıldı. Hata: {ae}. Kütüphane sürümünü kontrol edin.")
-             st.session_state.history.append({"role": "assistant", "content": f"Üzgünüm, SDK hatası oluştu: {ae}", "sources": []})
         except Exception as e:
-            if "API_KEY" in str(e).upper() or "permission denied" in str(e).lower():
-                 st.error(f"RAG/API Hatası: {str(e)}. Lütfen Secrets bölümündeki GEMINI_API_KEY'i kontrol edin.")
-            else:
-                 st.error(f"RAG/API Hatası: {str(e)}")
+            st.error(f"RAG/API Hatası: {str(e)}")
             st.session_state.history.append({"role": "assistant", "content": f"Üzgünüm, bir hata oluştu: {e}", "sources": []})
 
 
