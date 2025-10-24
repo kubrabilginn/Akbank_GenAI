@@ -55,5 +55,15 @@ def load_data_and_embeddings():
     recipe_docs = load_recipes()
     doc_ids = [f"doc_{i}" for i in range(len(recipe_docs))]
 
+# Line 58
     try:
-        # configure çağrıldığı için API anahtarını tekrar
+    # BU SATIRDAN SONRAKİ KODLARIN GİRİNTİLİ OLMASI GEREKİR
+        result = genai.embed_content( # Bu satır en az bir boşluk içeride olmalı
+            model=embedding_model_name,
+            content=recipe_docs,
+            task_type="RETRIEVAL_DOCUMENT"
+        )
+        embeds = result['embedding']
+    except Exception as e: # Bu satır 'try' ile aynı hizada olmalı
+        st.error(f"Embedding oluşturulurken hata: {str(e)}")
+        st.stop()
