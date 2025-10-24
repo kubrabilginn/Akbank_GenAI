@@ -27,7 +27,7 @@ except Exception as e:
 
 # Model isimleri
 embedding_model_name = 'all-MiniLM-L6-v2' # HF Embedding
-llm_model_name = "gemma-7b-it" # Switch to Gemma as Mixtral is also decommissioned
+llm_model_name = "llama-3.1-8b-instant" # Güncel ve aktif Groq modeli
 # ------------------------------------------------
 # Sentence Transformer Modelini Yükleme (Cache ile)
 # ------------------------------------------------
