@@ -44,4 +44,4 @@ Projenin Streamlit Cloud'da çalışan kalıcı web linki aşağıdadır. Uygula
 Kalıcı Web URL'si:
 https://akbankgenai-diqgapppp2uk8gjg92cu6jw7.streamlit.app/
 
-Test Kılavuzu: Uygulamaya girdikten sonra, "ıspanaklı bir tarif", "çikolatalı kek nasıl yapılır" veya "tavuklu salata" gibi sorular sorarak chatbot'u test edebilirsiniz. Yanıtla birlikte kullanılan kaynak tarifler de gösterilecektir.
+Test Kılavuzu: Uygulamaya girdikten sonra, "salçalı bir tarif", "mac and cheese nasıl yapılır" veya "falafel tarifi" gibi sorular sorarak chatbot'u test edebilirsiniz. Yanıtla birlikte kullanılan kaynak tarifler de gösterilecektir.
