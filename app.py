@@ -76,7 +76,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # UI
 # ------------------------------------------------
 st.set_page_config(page_title="Yemek Tarifleri Chatbotu", layout="wide")
-st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu (Doğrudan SDK RAG)")
+st.title("🍽️ Akbank GenAI Yemek Tarifleri Chatbotu")
 st.divider()
 
 # Veri ve embeddingleri yükle
@@ -145,4 +145,4 @@ for msg in st.session_state.history:
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and msg.get("sources"):
             st.markdown("---")
-            st.markdown("**Kullanılan Kaynak Tarifler:**
+            st.markdown("**Kullanılan Kaynak Tarifler:**)
