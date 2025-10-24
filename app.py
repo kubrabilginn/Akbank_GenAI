@@ -9,20 +9,15 @@ from google import genai
 from google.genai import types
 
 # ------------------------------------------------
-# API Key kontrolü
+# API Key kontrolü (Secrets'tan okunur)
 # ------------------------------------------------
 API_KEY = os.environ.get("GEMINI_API_KEY")
 if not API_KEY:
     st.error("❌ API Anahtarı bulunamadı. Streamlit Secrets bölümüne GEMINI_API_KEY ekleyin.")
     st.stop()
 
-# DÜZELTME: genai.configure() kaldırıldı. Anahtar doğrudan kullanılacak.
-# try:
-#     genai.configure(api_key=API_KEY) # <-- BU SATIRI KALDIRDIK
-#     client = genai.GenerativeModel
-# except Exception as e:
-#     st.error(f"Google AI Client başlatılırken hata: {e}")
-#     st.stop()
+# 🛑 genai.configure() ÇAĞRISINI TAMAMEN KALDIRDIK. 🛑
+# Kütüphanenin API_KEY'i ortam değişkeninden otomatik almasını bekliyoruz.
 
 embedding_model_name = "models/embedding-001"
 llm_model_name = "gemini-2.5-flash"
@@ -47,7 +42,7 @@ def load_recipes() -> list[str]:
     return recipes
 
 # ------------------------------------------------
-# Veri ve Embedding Cache (API Anahtarı ile Düzeltildi)
+# Veri ve Embedding Cache (configure olmadan)
 # ------------------------------------------------
 @st.cache_data(show_spinner="Veriler ve embeddingler hazırlanıyor...")
 def load_data_and_embeddings():
@@ -55,9 +50,7 @@ def load_data_and_embeddings():
     doc_ids = [f"doc_{i}" for i in range(len(recipe_docs))]
 
     try:
-        # DÜZELTME: API Anahtarını doğrudan embed_content çağrısına ekliyoruz (gerekliyse)
-        # Genellikle API_KEY ortam değişkeninden otomatik alınır, ama garanti olsun.
-        genai.configure(api_key=API_KEY) # Global configure'u burada yapalım
+        # API anahtarı ortam değişkeninden otomatik alınmalı
         result = genai.embed_content(
             model=embedding_model_name,
             content=recipe_docs,
@@ -65,7 +58,11 @@ def load_data_and_embeddings():
         )
         embeds = result['embedding']
     except Exception as e:
-        st.error(f"Embedding oluşturulurken hata: {str(e)}")
+        # Hata mesajına API anahtarı kontrolü ekleyelim
+        if "API_KEY" in str(e).upper():
+             st.error(f"Embedding oluşturulurken API Anahtarı hatası: {str(e)}. Lütfen Secrets'ı kontrol edin.")
+        else:
+             st.error(f"Embedding oluşturulurken hata: {str(e)}")
         st.stop()
 
     return recipe_docs, doc_ids, np.array(embeds)
@@ -97,8 +94,7 @@ if query:
 
     with st.spinner("Tarif aranıyor ve yanıt oluşturuluyor..."):
         try:
-            # 1. Sorgu embed (API Anahtarı ile Düzeltildi)
-            # Global configure yapıldığı için tekrar anahtar geçmeye gerek yok.
+            # 1. Sorgu embed (configure olmadan)
             q_res = genai.embed_content(
                 model=embedding_model_name,
                 content=query,
@@ -125,8 +121,8 @@ BAĞLAM:
 SORU: {query}
 YANIT:"""
 
-            # 5. LLM'ye gönderme (API Anahtarı ile Düzeltildi)
-            llm = genai.GenerativeModel(model_name=llm_model_name) # Modeli burada başlat
+            # 5. LLM'ye gönderme (configure olmadan)
+            llm = genai.GenerativeModel(model_name=llm_model_name)
             response = llm.generate_content(prompt)
 
             llm_response = response.text
@@ -135,8 +131,13 @@ YANIT:"""
             st.session_state.history.append({"role": "assistant", "content": llm_response, "sources": source_names})
 
         except Exception as e:
-            error_msg = f"RAG/API Hatası: {str(e)}"
-            st.session_state.history.append({"role": "assistant", "content": error_msg, "sources": []})
+             # Hata mesajına API anahtarı kontrolü ekleyelim
+            if "API_KEY" in str(e).upper() or "permission denied" in str(e).lower():
+                 st.error(f"RAG/API Hatası: {str(e)}. Lütfen Secrets bölümündeki GEMINI_API_KEY'i kontrol edin.")
+            else:
+                 st.error(f"RAG/API Hatası: {str(e)}")
+            st.session_state.history.append({"role": "assistant", "content": f"Üzgünüm, bir hata oluştu: {e}", "sources": []})
+
 
 # Geçmişi gösterme (Değişiklik yok)
 for msg in st.session_state.history:
@@ -144,6 +145,4 @@ for msg in st.session_state.history:
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and msg.get("sources"):
             st.markdown("---")
-            st.markdown("**Kullanılan Kaynak Tarifler:**")
-            for name in set(msg.get("sources", [])):
-                st.markdown(f"**-** *{name}*")
+            st.markdown("**Kullanılan Kaynak Tarifler:**
